@@ -33,33 +33,39 @@ static void postReading(float temp, float humidity) {
 }
 
 static const char CONFIG_HTML[] PROGMEM = R"(
-<!DOCTYPE html><html>
-<head><title>Logger Config</title>
-<style>
-body{font-family:sans-serif;max-width:400px;margin:40px auto;padding:0 20px}
-input{width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box}
-button{width:100%;padding:10px;background:#2563eb;color:white;border:none;cursor:pointer;margin-bottom:8px}
-.log-btn{background:#16a34a}
-.readings{background:#f3f4f6;padding:12px;border-radius:4px;margin-bottom:20px}
-.error{color:#dc2626;margin-bottom:12px}
-</style></head>
-<body>
-<h2>Logger Config</h2>
-<div class="readings"><strong>Current:</strong> %TEMP%&deg;C | %HUMIDITY%% RH</div>
-%ERROR%
-<form method="POST">
-<label>API URL</label>
-<input name="api_url" value="%API_URL%" required>
-<label>Logger Name</label>
-<input name="logger_name" value="%LOGGER_NAME%" required>
-<label>Log Interval (minutes)</label>
-<input name="log_interval" type="number" min="1" value="%LOG_INTERVAL%" required>
-<label>Admin Password</label>
-<input name="admin_pass" type="password" required>
-<button type="submit" formaction="/config">Save</button>
-<button type="submit" formaction="/log-now" class="log-btn">Log Now</button>
-</form>
-</body></html>
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Logger Config</title>
+        <style>
+            body{font-family:sans-serif;max-width:400px;margin:40px auto;padding:0 20px}
+            input{width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box}
+            button{width:100%;padding:10px;background:#2563eb;color:white;border:none;cursor:pointer;margin-bottom:8px}
+            .log-btn{background:#16a34a}
+            .readings{background:#f3f4f6;padding:12px;border-radius:4px;margin-bottom:20px}
+            .error{color:#dc2626;margin-bottom:12px}
+            .reset-btn{background:#dc2626}
+        </style>
+    </head>
+    <body>
+        <h2>Logger Config</h2>
+        <div class="readings"><strong>Current:</strong> %TEMP%&deg;C | %HUMIDITY%% RH</div>
+        %ERROR%
+        <form method="POST">
+            <label>API URL</label>
+            <input name="api_url" value="%API_URL%" required>
+            <label>Logger Name</label>
+            <input name="logger_name" value="%LOGGER_NAME%" required>
+            <label>Log Interval (minutes)</label>
+            <input name="log_interval" type="number" min="1" value="%LOG_INTERVAL%" required>
+            <label>Admin Password</label>
+            <input name="admin_pass" type="password" required>
+            <button type="submit" formaction="/config">Save</button>
+            <button type="submit" formaction="/log-now" class="log-btn">Log Now</button>
+            <button type="submit" formaction="/reset" class="reset-btn">Reset Device</button>
+        </form>
+    </body>
+</html>
 )";
 
 static String buildConfigPage(const String& error = "") {
@@ -116,13 +122,25 @@ void startNormalMode() {
         server.send(302);
     });
 
+    server.on("/reset", HTTP_POST, []() {
+        if (server.arg("admin_pass") != cfg.adminPass) {
+            server.send(200, "text/html", buildConfigPage("Incorrect password."));
+            return;
+        }
+        Config::clear();
+        server.send(200, "text/html", "<h2>Config cleared. Device restarting in setup mode...</h2>");
+        delay(2000);
+        ESP.restart();
+    });
+
     server.begin();
     lastPost = millis();
 }
 
 void handleNormalLoop() {
-    if (WiFi.status() != WL_CONNECTED)
+    if (WiFi.status() != WL_CONNECTED) {
         connectWifi();
+    }
 
     server.handleClient();
 
